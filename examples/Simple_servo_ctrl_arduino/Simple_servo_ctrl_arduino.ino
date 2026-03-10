@@ -91,17 +91,14 @@ This example does NOT use servo feedback. Therefore:
 //
 // This is the PHYSICAL MAXIMUM SPEED of the actuator used by the library
 // as reference for speed percentages.
+// If you use another servo or change supply voltage, update this value.
 #define SERVO_MAX_SPEED_DEGPS  261.0f
 
-// Servo PWM calibration for this example.
-//
-// These values are intentionally conservative and generic.
-// Many hobby servos behave reasonably around 1000..2000 us,
-// but using a wider calibrated range can be useful if needed.
-//
-// Here we define a common "practical" range centered at 1500 us.
-#define SERVO_CENTER_US        1500
-#define SERVO_HALFSPAN_US       500
+// ---- Servo PWM calibration ----
+// These define how the 0..180° command maps to microseconds.
+// Adjust to match YOUR servo endpoints safely.
+#define SERVO_CENTER_US  1150
+#define SERVO_HALFSPAN_US  650
 
 #define PWM_MIN_US  (SERVO_CENTER_US - SERVO_HALFSPAN_US)   // 1000 us
 #define PWM_MAX_US  (SERVO_CENTER_US + SERVO_HALFSPAN_US)   // 2000 us

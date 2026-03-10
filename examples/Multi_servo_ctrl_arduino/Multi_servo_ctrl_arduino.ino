@@ -107,6 +107,8 @@ const uint8_t SERVO_PINS[NUM_SERVOS] =
 // PWM calibration
 // ============================================================================
 //
+// These define how the 0..180° command maps to microseconds.
+// Adjust to match YOUR servo endpoints safely.
 // For a generic example we assume:
 //
 // 1000 µs -> minimum angle
