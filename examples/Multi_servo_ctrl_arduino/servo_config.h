@@ -8,23 +8,22 @@ License:      Apache 2.0
 
 Description:
 
-This file contains the hardware configuration of the servos used in the
-Multi_servo_ctrl_arduino example.
+This file defines the complete configuration table for all servos used
+in the Multi_servo_ctrl_arduino example.
 
-Separating configuration from the main sketch allows the user to modify
-servo parameters without touching the application logic.
+Each servo has its own explicit configuration entry.
 
-Typical parameters that belong here:
+Even if several servos share the same parameters, defining them
+individually makes the example easier to adapt to real robotic systems
+where every joint may have different:
 
-- PWM pins
-- servo angle limits
-- allowed motion limits
-- servo speed characterization
 - PWM calibration
-- feedback configuration (if used)
+- mechanical limits
+- speed characteristics
+- feedback configuration
 
-In real robotic systems, this file typically represents the mechanical
-characterization of the robot joints.
+Users typically modify only this file to adapt the example to their
+own hardware.
 
 ===============================================================================
 */
@@ -34,149 +33,59 @@ characterization of the robot joints.
 
 #include "ServoController.h"
 
-
-// ============================================================================
-// Number of servos used in this example
-// ============================================================================
-
 #define NUM_SERVOS 9
-
-
-// ============================================================================
-// Servo PWM pins
-// ============================================================================
-//
-// These pins correspond to the PWM signals sent to each servo.
-// Modify them according to your wiring.
-//
-
-static const uint8_t SERVO_PINS[NUM_SERVOS] =
-{
-  2,3,4,5,6,7,8,9,10
-};
-
-
-// ============================================================================
-// Servo names
-// ============================================================================
-//
-// Names are optional but useful for debugging or telemetry.
-//
-
-static const char* SERVO_NAMES[NUM_SERVOS] =
-{
-  "S1","S2","S3","S4","S5","S6","S7","S8","S9"
-};
-
-
-// ============================================================================
-// Servo characterization
-// ============================================================================
-//
-// This section describes the physical behaviour of the servo type used.
-//
-// Example used here: Futaba S3003
-//
-// Typical speed:
-// 0.23 s / 60°
-//
-// Converted:
-//
-// 60 / 0.23 ≈ 261 deg/s
-//
-
-#define SERVO_MAX_SPEED_DEGPS 261.0f
-
-
-// ============================================================================
-// PWM calibration
-// ============================================================================
-//
-// Generic safe range used by many hobby servos.
-//
-
-#define PWM_MIN_US 1000
-#define PWM_MAX_US 2000
-
-
-// ============================================================================
-// Servo mechanical limits
-// ============================================================================
-//
-// These correspond to the full calibrated range of the servo.
-//
-
-#define SERVO_MIN_DEG 0.0f
-#define SERVO_MAX_DEG 180.0f
-
-
-// ============================================================================
-// Allowed motion limits
-// ============================================================================
-//
-// These limits define the range allowed by the application.
-// They may be narrower than the physical limits.
-//
-
-#define ALLOWED_MIN_DEG 0.0f
-#define ALLOWED_MAX_DEG 180.0f
-
-
-// ============================================================================
-// Default motion parameters
-// ============================================================================
-
-#define DEFAULT_SPEED_PCT 50
-#define DEFAULT_ACCEL_PCT 50
-
-
-// ============================================================================
-// Rest position
-// ============================================================================
-
-#define REST_DEG 90.0f
 
 
 // ============================================================================
 // Servo configuration table
 // ============================================================================
 //
-// This function fills a ServoConfig structure for one servo.
-// All servos share the same parameters in this example.
+// Each entry corresponds to one servo.
+//
+// Fields:
+//
+// name                     : logical servo name
+// pwm_pin                  : Arduino pin driving the servo
+// servo_min_deg            : calibrated minimum servo angle
+// servo_max_deg            : calibrated maximum servo angle
+// allowed_min_deg          : application limit
+// allowed_max_deg          : application limit
+// rest_deg                 : rest position used at initialization
+// pwm_min_us               : PWM value corresponding to servo_min_deg
+// pwm_max_us               : PWM value corresponding to servo_max_deg
+// max_speed_degps          : physical maximum servo speed
+// default_speed_pct        : default motion speed
+// default_accel_pct        : default motion acceleration
+// feedback_adc_pin         : analog pin used for feedback (-1 if none)
+// fb_adc_at_servo_min_deg  : ADC value at servo_min_deg
+// fb_adc_at_servo_max_deg  : ADC value at servo_max_deg
+// inverted                 : invert direction
+// fault_detection_enabled  : enable stall detection
 //
 
-inline ServoConfig makeServoConfig(const char* name,uint8_t pin)
+static ServoConfig servoConfigs[NUM_SERVOS] =
 {
-    ServoConfig cfg;
 
-    cfg.name = name;
-    cfg.pwm_pin = pin;
+// name   pin  min  max  allowedMin allowedMax rest  pwmMin pwmMax speed  defV defA fbPin fbMin fbMax inv fault
 
-    cfg.servo_min_deg = SERVO_MIN_DEG;
-    cfg.servo_max_deg = SERVO_MAX_DEG;
+{ "S1",   2,   0, 180,     0,       180,       90,   1000,  2000,  261,    50,  50,  -1,    0,    0,  false, false },
 
-    cfg.allowed_min_deg = ALLOWED_MIN_DEG;
-    cfg.allowed_max_deg = ALLOWED_MAX_DEG;
+{ "S2",   3,   0, 180,     0,       180,       90,   1000,  2000,  261,    50,  50,  -1,    0,    0,  false, false },
 
-    cfg.rest_deg = REST_DEG;
+{ "S3",   4,   0, 180,     0,       180,       90,   1000,  2000,  261,    50,  50,  -1,    0,    0,  false, false },
 
-    cfg.pwm_min_us = PWM_MIN_US;
-    cfg.pwm_max_us = PWM_MAX_US;
+{ "S4",   5,   0, 180,     0,       180,       90,   1000,  2000,  261,    50,  50,  -1,    0,    0,  false, false },
 
-    cfg.max_speed_degps = SERVO_MAX_SPEED_DEGPS;
+{ "S5",   6,   0, 180,     0,       180,       90,   1000,  2000,  261,    50,  50,  -1,    0,    0,  false, false },
 
-    cfg.default_speed_pct = DEFAULT_SPEED_PCT;
-    cfg.default_accel_pct = DEFAULT_ACCEL_PCT;
+{ "S6",   7,   0, 180,     0,       180,       90,   1000,  2000,  261,    50,  50,  -1,    0,    0,  false, false },
 
-    // No feedback used in this example
-    cfg.feedback_adc_pin = -1;
-    cfg.fb_adc_at_servo_min_deg = 0;
-    cfg.fb_adc_at_servo_max_deg = 0;
+{ "S7",   8,   0, 180,     0,       180,       90,   1000,  2000,  261,    50,  50,  -1,    0,    0,  false, false },
 
-    cfg.inverted = false;
-    cfg.fault_detection_enabled = false;
+{ "S8",   9,   0, 180,     0,       180,       90,   1000,  2000,  261,    50,  50,  -1,    0,    0,  false, false },
 
-    return cfg;
-}
+{ "S9",  10,   0, 180,     0,       180,       90,   1000,  2000,  261,    50,  50,  -1,    0,    0,  false, false }
+
+};
 
 #endif
