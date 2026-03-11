@@ -1,7 +1,9 @@
 # Enhanced Servo Library
 
 Author: Alejandro Alonso Puig 
+
 License: Apache 2.0 
+
 Repository: https://github.com/aalonsopuig
 
 ------------------------------------------------------------------------
