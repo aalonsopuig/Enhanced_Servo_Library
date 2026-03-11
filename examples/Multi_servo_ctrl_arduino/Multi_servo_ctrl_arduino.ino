@@ -1,256 +1,121 @@
 /*
 ===============================================================================
 Name:         Multi_servo_ctrl_arduino
-Version:      1.0.0
+Version:      1.1.0
 Author:       Alejandro Alonso Puig + GPT
 GitHub:       https://github.com/aalonsopuig
 Date:         2026-03-10
 License:      Apache 2.0
 -------------------------------------------------------------------------------
+
 Description:
 
-Didactic example showing how to control multiple servos using the
+Example demonstrating how to control multiple servos using the
 ServoController library.
 
-This sketch controls 9 standard hobby servos, all configured as generic
-Futaba S3003-like servos, without feedback.
+This example intentionally separates the **servo hardware configuration**
+from the main program logic.
 
-All servos receive the SAME:
+Configuration parameters such as:
 
-- target angle
-- speed percentage
-- acceleration percentage
+- servo pins
+- PWM calibration
+- motion limits
+- servo speed characterization
 
-These values are read from three potentiometers:
+are defined in the file:
 
-A0 -> target angle
-A1 -> speed percentage
-A2 -> acceleration percentage
+servo_config.h
 
-This example demonstrates the typical usage pattern of the library:
-
-1) Create a configuration table (ServoConfig)
-2) Create an array of ServoController objects
-3) Initialize each servo in setup()
-4) Send commands to all servos
-5) Call update() periodically for each servo
-
-Hardware note:
-Servos must be powered from an external power supply.
-Do NOT power multiple servos from the Arduino 5V pin.
+This approach improves maintainability and mirrors the configuration
+separation used in larger robotics systems (ROS, robot firmware, etc.).
 
 ===============================================================================
 */
 
 #include <Arduino.h>
 #include "ServoController.h"
+#include "servo_config.h"
 
 
 // ============================================================================
-// General configuration
+// User control inputs
 // ============================================================================
+//
+// Three potentiometers define the motion parameters applied to all servos.
+//
 
-// Number of servos used in this example.
-// The example intentionally uses many servos to demonstrate that the
-// library scales easily to multi-servo robotic systems.
-#define NUM_SERVOS 9
-
-
-// ============================================================================
-// Pins
-// ============================================================================
-
-// Analog inputs used for the three control potentiometers.
-#define POT_TARGET_PIN   A0   // Target position (0–180 degrees)
-#define POT_SPEED_PIN    A1   // Speed percentage (1–100%)
-#define POT_ACCEL_PIN    A2   // Acceleration percentage (1–100%)
-
-// Digital pins used to drive the servo PWM signals.
-// On most Arduino boards the Servo library can drive many pins.
-const uint8_t SERVO_PINS[NUM_SERVOS] =
-{
-  2,3,4,5,6,7,8,9,10
-};
+#define POT_TARGET_PIN A0
+#define POT_SPEED_PIN  A1
+#define POT_ACCEL_PIN  A2
 
 
 // ============================================================================
-// ADC helpers
+// ADC parameters
 // ============================================================================
 
-// ADC scale for Arduino (10-bit ADC)
 #define ADC_SCALE   1023.0f
-
-// Number of samples used to average potentiometer readings.
-// Averaging reduces visible jitter in the knobs.
 #define POT_SAMPLES 4
 
 
 // ============================================================================
-// Servo characterization (Futaba S3003 reference)
+// Servo objects
 // ============================================================================
 //
-// A typical Futaba S3003 servo at 4.8 V has a speed of:
+// One controller object per servo.
 //
-// 0.23 seconds / 60°
-//
-// Converting to angular velocity:
-//
-// 60 / 0.23 ≈ 261 deg/s
-//
-// This value is used by the library as the physical maximum speed of
-// the servo. Speed percentages are applied relative to this value.
-//
-#define SERVO_MAX_SPEED_DEGPS 261.0f
 
-
-// ============================================================================
-// PWM calibration
-// ============================================================================
-//
-// These define how the 0..180° command maps to microseconds.
-// Adjust to match YOUR servo endpoints safely.
-// For a generic example we assume:
-//
-// 1000 µs -> minimum angle
-// 2000 µs -> maximum angle
-//
-// Many hobby servos accept roughly this range.
-//
-#define SERVO_CENTER_US    1500
-#define SERVO_HALFSPAN_US   500
-
-#define PWM_MIN_US (SERVO_CENTER_US - SERVO_HALFSPAN_US)
-#define PWM_MAX_US (SERVO_CENTER_US + SERVO_HALFSPAN_US)
-
-
-// ============================================================================
-// Angle ranges
-// ============================================================================
-//
-// servo_min_deg / servo_max_deg
-//     Physical calibrated limits of the servo.
-//
-// allowed_min_deg / allowed_max_deg
-//     Limits imposed by the application. These can be narrower than
-//     the servo's mechanical limits.
-//
-#define SERVO_MIN_DEG   0.0f
-#define SERVO_MAX_DEG   180.0f
-
-#define ALLOWED_MIN_DEG 0.0f
-#define ALLOWED_MAX_DEG 180.0f
-
-
-// Rest position used at initialization.
-// Servos are synchronized to this angle when the program starts.
-#define REST_DEG 90.0f
-
-
-// Default motion parameters used during initialization.
-// They are quickly replaced by the potentiometer values in loop().
-#define DEFAULT_SPEED_PCT  50
-#define DEFAULT_ACCEL_PCT  50
-
-
-// ============================================================================
-// Global objects
-// ============================================================================
-
-// Configuration table describing each servo.
+ServoController servos[NUM_SERVOS];
 ServoConfig servoTable[NUM_SERVOS];
 
-// One controller object per servo.
-ServoController servos[NUM_SERVOS];
-
 
 // ============================================================================
-// Helper functions
+// Utility helpers
 // ============================================================================
 
-// Clamp a float value to a given range.
-static inline float clampf(float x, float lo, float hi)
+// Clamp a value between two limits
+static inline float clampf(float x,float lo,float hi)
 {
-  if (x < lo) return lo;
-  if (x > hi) return hi;
+  if(x<lo) return lo;
+  if(x>hi) return hi;
   return x;
 }
 
 
-// Read an analog input several times and return the average value.
-// This simple filtering reduces small ADC noise and knob jitter.
-float readAveragedADC(uint8_t pin, int samples)
+// Average several ADC samples to reduce noise
+float readAveragedADC(uint8_t pin,int samples)
 {
-  long sum = 0;
+  long sum=0;
 
-  for (int i=0;i<samples;i++)
+  for(int i=0;i<samples;i++)
   {
-    sum += analogRead(pin);
+    sum+=analogRead(pin);
   }
 
-  return (float)sum / samples;
+  return (float)sum/samples;
 }
 
 
-// Convert ADC reading to target angle (0–180 degrees).
+// Convert ADC value to target angle
 float targetDegFromAdc(float adc)
 {
-  float deg = (adc / ADC_SCALE) * 180.0f;
+  float deg=(adc/ADC_SCALE)*180.0f;
 
   return clampf(deg,0.0f,180.0f);
 }
 
 
-// Convert ADC reading to a percentage in the range 1–100.
+// Convert ADC value to percentage
 uint8_t percentFromAdc(float adc)
 {
-  float t = clampf(adc / ADC_SCALE,0.0f,1.0f);
+  float t=clampf(adc/ADC_SCALE,0.0f,1.0f);
 
-  int pct = (int)(1.0f + t*99.0f + 0.5f);
+  int pct=(int)(1.0f+t*99.0f+0.5f);
 
-  if (pct < 1) pct = 1;
-  if (pct > 100) pct = 100;
+  if(pct<1) pct=1;
+  if(pct>100) pct=100;
 
   return (uint8_t)pct;
-}
-
-
-// Helper function that builds a ServoConfig structure for one servo.
-// In this example all servos share identical parameters except for
-// their PWM pin and logical name.
-ServoConfig makeServoConfig(const char* name,uint8_t pwmPin)
-{
-  ServoConfig cfg;
-
-  cfg.name = name;
-  cfg.pwm_pin = pwmPin;
-
-  cfg.servo_min_deg = SERVO_MIN_DEG;
-  cfg.servo_max_deg = SERVO_MAX_DEG;
-
-  cfg.allowed_min_deg = ALLOWED_MIN_DEG;
-  cfg.allowed_max_deg = ALLOWED_MAX_DEG;
-
-  cfg.rest_deg = REST_DEG;
-
-  cfg.pwm_min_us = PWM_MIN_US;
-  cfg.pwm_max_us = PWM_MAX_US;
-
-  cfg.max_speed_degps = SERVO_MAX_SPEED_DEGPS;
-
-  cfg.default_speed_pct = DEFAULT_SPEED_PCT;
-  cfg.default_accel_pct = DEFAULT_ACCEL_PCT;
-
-  // No feedback is used in this example.
-  cfg.feedback_adc_pin = -1;
-  cfg.fb_adc_at_servo_min_deg = 0;
-  cfg.fb_adc_at_servo_max_deg = 0;
-
-  cfg.inverted = false;
-
-  // Fault detection disabled since we have no feedback.
-  cfg.fault_detection_enabled = false;
-
-  return cfg;
 }
 
 
@@ -260,26 +125,17 @@ ServoConfig makeServoConfig(const char* name,uint8_t pwmPin)
 
 void setup()
 {
-  // Logical names used for the servos.
-  // These are only used for debugging or future extensions.
-  const char* names[NUM_SERVOS] =
-  {
-    "S1","S2","S3","S4","S5","S6","S7","S8","S9"
-  };
+  // Initialize each servo controller using the configuration
+  // defined in servo_config.h
 
-  // Initialize each servo controller.
-  // This loop demonstrates the typical multi-servo initialization pattern.
   for(int i=0;i<NUM_SERVOS;i++)
   {
-    // Build configuration entry
-    servoTable[i] = makeServoConfig(names[i],SERVO_PINS[i]);
+    servoTable[i]=makeServoConfig(SERVO_NAMES[i],SERVO_PINS[i]);
 
-    // Initialize controller
     servos[i].begin(servoTable[i]);
 
-    // Synchronize software state with the physical servo position.
-    // Since we do not have feedback, we assume the servo is already
-    // at the rest position.
+    // Since this example does not use feedback,
+    // we synchronize the controller with the known rest angle.
     servos[i].syncToAngle(REST_DEG);
   }
 }
@@ -291,28 +147,29 @@ void setup()
 
 void loop()
 {
-  // Read control potentiometers
-  float adcTarget = readAveragedADC(POT_TARGET_PIN,POT_SAMPLES);
-  float adcSpeed  = readAveragedADC(POT_SPEED_PIN,POT_SAMPLES);
-  float adcAccel  = readAveragedADC(POT_ACCEL_PIN,POT_SAMPLES);
+  // Read user control inputs
 
-  // Convert ADC readings into motion parameters
-  float   targetDeg = targetDegFromAdc(adcTarget);
-  uint8_t speedPct  = percentFromAdc(adcSpeed);
-  uint8_t accelPct  = percentFromAdc(adcAccel);
+  float adcTarget=readAveragedADC(POT_TARGET_PIN,POT_SAMPLES);
+  float adcSpeed =readAveragedADC(POT_SPEED_PIN,POT_SAMPLES);
+  float adcAccel =readAveragedADC(POT_ACCEL_PIN,POT_SAMPLES);
 
-  // Send the same command to all servos
+  float   targetDeg=targetDegFromAdc(adcTarget);
+  uint8_t speedPct =percentFromAdc(adcSpeed);
+  uint8_t accelPct =percentFromAdc(adcAccel);
+
+  // Send the same motion command to all servos
+
   for(int i=0;i<NUM_SERVOS;i++)
   {
     servos[i].setTarget(targetDeg,speedPct,accelPct);
   }
 
-  // Update motion of each servo controller
+  // Update all servo controllers
+
   for(int i=0;i<NUM_SERVOS;i++)
   {
     servos[i].update();
   }
 
-  // Small delay to limit loop frequency
   delay(20);
 }
