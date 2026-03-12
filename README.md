@@ -1,10 +1,12 @@
 # Enhanced Servo Library
 
-Author: Alejandro Alonso Puig 
+Author: Alejandro Alonso Puig + GPT
 
 License: Apache 2.0 
 
 Repository: https://github.com/aalonsopuig
+
+Status: Validation in progress (March 2026)
 
 ------------------------------------------------------------------------
 
@@ -337,7 +339,7 @@ Futaba S3003
 
 0.23 s / 60° → 261 deg/s  
 
-If the servo drives a joint through **gears or mechanical transformations**, the real joint speed must be measured.
+`max_speed_degps` represents the maximum angular speed of the **controlled joint**, not necessarily the raw servo shaft speed. If the servo drives a joint through **gears or mechanical transformations**, the real joint speed must be measured.
 
 Move the joint between its limits and measure the travel time.
 
@@ -386,3 +388,22 @@ Each joint should define:
 - the desired motion parameters
 
 This separation allows the same servo model to be used in different joints with different mechanical constraints.
+
+## Example servo model parameters
+
+The following table summarizes typical parameters for several hobby servos
+used with this library. Speed values correspond to **6 V supply** when available.
+
+| Servo model        | servo_min_deg | servo_max_deg | pwm_min_us | pwm_max_us | max_speed_degps |
+|--------------------|--------------|--------------|-----------|-----------|----------------|
+| Hitec HS-805BB     | 0            | 180          | 700       | 2400      | 428.6          |
+| TowerPro SG-5010   | 0            | 180          | 500       | 1800      | 375.0          |
+| HobbyKing HK15298  | —            | —            | —         | —         | 461.5          |
+| Miuzei MF90        | 0            | 180          | 500       | 2500      | 750.0          |
+| Corona DS929HV     | —            | —            | —         | —         | 600.0          |
+| Futaba S3003       | —            | —            | —         | —         | 315.8          |
+| DIYMore DM996      | 0            | 180          | 500       | 2500      | 400.0          |
+
+Note: PWM limits are approximate values measured experimentally and may vary
+between units. Always verify safe limits before operating the servo in a
+mechanical assembly.
