@@ -255,10 +255,134 @@ Example demonstrating fault detection and safety shutdown.
 
 ------------------------------------------------------------------------
 
-## Hardware Requirements
+# Servo calibration procedure
 
--   Arduino compatible board
--   Standard RC servo
--   Optional servo with accessible potentiometer feedback
--   External servo power supply recommended
+This section describes a simple procedure to obtain the parameters required in `servo_config.h` when using the **ServoController library**.
 
+Servo configuration parameters come from three different sources:
+
+- **Servo model** (electrical and internal characteristics)
+- **Mechanical joint** (limits imposed by the robot articulation)
+- **Application settings** (desired behavior)
+
+A convenient calibration tool is the program:
+
+https://github.com/aalonsopuig/servo_control_with_feedback
+
+During calibration the **speed and acceleration potentiometers should be set to 100%**.
+
+---
+
+## 1. Servo electrical limits
+
+Determine the PWM range corresponding to the full travel of the servo.
+
+This depends only on the **servo model** and is the same for all joints using that servo.
+
+Parameters obtained:
+
+servo_min_deg  
+servo_max_deg  
+pwm_min_us  
+pwm_max_us  
+
+In this library the servo range is normally assumed to be:
+
+servo_min_deg = 0  
+servo_max_deg = 180  
+
+Example measurements:
+
+Hitec HS-805BB  
+
+pwm_min_us ≈ 700  
+pwm_max_us ≈ 2400  
+
+---
+
+## 2. Mechanical joint limits
+
+Once the servo is installed in the robot articulation, determine the safe motion limits of the joint.
+
+Using the calibration program, move the servo slowly and observe the articulation.
+
+Record the safe operating range:
+
+allowed_min_deg  
+allowed_max_deg  
+
+These limits depend on the **mechanical design of the joint**, not on the servo itself.
+
+---
+
+## 3. Rest position
+
+Define the position used when the system initializes.
+
+This should correspond to a **mechanically safe neutral pose**.
+
+Parameter:
+
+rest_deg  
+
+---
+
+## 4. Servo speed
+
+If the servo is used directly, the maximum speed can be taken from the **manufacturer datasheet**.
+
+Example:
+
+Futaba S3003  
+
+0.23 s / 60° → 261 deg/s  
+
+If the servo drives a joint through **gears or mechanical transformations**, the real joint speed must be measured.
+
+Move the joint between its limits and measure the travel time.
+
+max_speed_degps = angle_travel / time  
+
+Example:
+
+180° in 10.27 s  
+max_speed_degps ≈ 17.5 deg/s  
+
+---
+
+## 5. Feedback calibration (optional)
+
+If the servo feedback potentiometer is accessible, its ADC values can be used to estimate the real angle.
+
+Using the calibration program:
+
+1. Move the servo to its minimum angle  
+2. Record the ADC value  
+3. Move the servo to its maximum angle  
+4. Record the ADC value  
+
+Parameters obtained:
+
+fb_adc_at_servo_min_deg  
+fb_adc_at_servo_max_deg  
+
+Example (HS-805BB modification):
+
+fb_adc_at_servo_min_deg ≈ 101  
+fb_adc_at_servo_max_deg ≈ 383  
+
+These values depend on the **servo electronics**, not the articulation.
+
+---
+
+## 6. Final configuration
+
+Once these values are known, the corresponding entry can be completed in `servo_config.h`.
+
+Each joint should define:
+
+- the servo model characteristics
+- the articulation limits
+- the desired motion parameters
+
+This separation allows the same servo model to be used in different joints with different mechanical constraints.
